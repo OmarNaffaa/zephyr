@@ -206,6 +206,8 @@ Stepper
   * Renamed the ``stepper_enable_constant_velocity_mode`` function to :c:func:`stepper_run`.
   * Renamed the ``stepper_move`` function to :c:func:`stepper_move_by`.
   * Renamed the ``stepper_set_target_position`` function to :c:func:`stepper_move_to`.
+  * The :kconfig:option:`STEPPER_ADI_TMC_RAMP_GEN` is now deprecated and is replaced with the new
+    :kconfig:option:`STEPPER_ADI_TMC5041_RAMP_GEN` option.
 
 SPI
 ===
@@ -229,7 +231,15 @@ Video
 Watchdog
 ========
 
+Wi-Fi
+=====
+
 * Renamed the ``compatible`` from ``nxp,kinetis-wdog32`` to :dtcompatible:`nxp,wdog32`.
+
+* The config options :kconfig:option:`CONFIG_NXP_WIFI_BUILD_ONLY_MODE` and
+  :kconfig:option:`CONFIG_NRF_WIFI_BUILD_ONLY_MODE` are now unified under
+  :kconfig:option:`CONFIG_BUILD_ONLY_NO_BLOBS` making it a common entry point
+  for any vendor to enable builds without blobs.
 
 Bluetooth
 *********

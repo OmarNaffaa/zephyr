@@ -142,9 +142,11 @@ static void http_response_cb(struct http_response* rsp,
  * @param sock     - File descriptor referencing a socket that has been connected
  *                   to the HTTP server
  * @param hostname - HTTP hostname
- * @param url      - 
+ * @param url      - URL to perform request to
+ * 
+ * @return Negative integer if unsuccessful. Positive otherwise
  */
-void http_get(int sock, char* hostname, char* url)
+int http_get(int sock, char* hostname, char* url)
 {
     struct http_request req = { 0 };
     static uint8_t recv_buf[512];
@@ -159,4 +161,6 @@ void http_get(int sock, char* hostname, char* url)
     req.recv_buf_len = sizeof(recv_buf);
 
     ret = http_client_req(sock, &req, 5000, NULL);
+
+    return ret;
 }

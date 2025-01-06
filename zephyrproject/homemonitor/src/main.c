@@ -10,6 +10,7 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/sys/printk.h>
+#include <zephyr/sys/reboot.h>
 
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/wifi_mgmt.h>
@@ -23,13 +24,18 @@
 /* ============
     Globals
 ============ */
+#define HOMEMONITOR_DEBUG  false
+
 #define SSID  "Naffaa"
 #define PSK   "LimePlace!"
 
-#define DHT_POLLING_DELAY_SECONDS  (60 * 15)
+#define MINUTES_TO_SECONDS         60
+#define DHT_POLLING_DELAY_MINUTES  (30 * MINUTES_TO_SECONDS)
 
-#define THINGSPEAK_URL_MAX_LENGTH  60
-#define THINGSPEAK_API_KEY         "I4BV5Q70NNDWH0SP"
+#define THINGSPEAK_URL_MAX_LENGTH  80
+
+//#define THINGSPEAK_WRITE_API_KEY   "I4BV5Q70NNDWH0SP"
+#define THINGSPEAK_WRITE_API_KEY   "1LQH82DIQIIJHFRQ"
 
 static K_SEM_DEFINE(wifi_connected, 0, 1);
 static K_SEM_DEFINE(ipv4_address_obtained, 0, 1);
@@ -41,7 +47,7 @@ static struct net_mgmt_event_callback ipv4_cb;
     Function Prototypes
 ======================== */
 static const char* get_current_timestamp_string(void);
-static inline int create_thingspeak_http_get_url(char* buffer, double field1);
+static inline int create_thingspeak_http_get_url(char* buffer, double field1, double field2);
 
 static void handle_wifi_connect_result(struct net_mgmt_event_callback *cb);
 static void handle_wifi_disconnect_result(struct net_mgmt_event_callback *cb);
@@ -113,7 +119,8 @@ int main(void)
         char* thingspeakHostname = "api.thingspeak.com";
 
         rc = create_thingspeak_http_get_url(thingspeakUrl,
-                                            sensor_value_to_double(&temperature));
+                                            sensor_value_to_double(&temperature),
+                                            sensor_value_to_double(&humidity));
         if (rc < 0) {
             printk("Thingspeak URL creation failed: %d\n", rc);
             break;
@@ -122,13 +129,26 @@ int main(void)
 
         struct zsock_addrinfo *res;
         nslookup(thingspeakHostname, &res);
+        #if (HOMEMONITOR_DEBUG)
         print_addrinfo_results(&res);
+        #endif
 
         sock = connect_socket(&res, 80);
-        http_get(sock, thingspeakHostname, thingspeakUrl);
+
+        rc = http_get(sock, thingspeakHostname, thingspeakUrl);
+        if (rc < 0) {
+            printk("Couldn't HTTP GET to ThingSpeak\n");
+
+            /* Known issue with lower priced ESP32 where WiFi module fails periodically
+               (roughly once every few days). Rebooting resolves this issue, and this is
+               done is the currently fetched data point will be re-fetched on power cycle
+            */
+            sys_reboot(SYS_REBOOT_COLD);
+        }
+
         zsock_close(sock);
 
-        k_sleep(K_SECONDS(DHT_POLLING_DELAY_SECONDS));
+        k_sleep(K_SECONDS(DHT_POLLING_DELAY_MINUTES));
     }
 
     wifi_disconnect();
@@ -141,14 +161,15 @@ int main(void)
  * 
  * @param buffer - Location to store formatted string
  * @param field1 - Value of Field1
+ * @param field2 - Value of Field2
  */
-static inline int create_thingspeak_http_get_url(char* buffer, double field1)
+static inline int create_thingspeak_http_get_url(char* buffer, double field1, double field2)
 {
     // TODO: Add field 2 support for humidity
     double field1_fahrenheit = (field1 * 1.8) + 32;
     return snprintf(buffer, THINGSPEAK_URL_MAX_LENGTH,
-                    "/update.json?api_key=%s&field1=%.1f",
-                    THINGSPEAK_API_KEY, field1_fahrenheit);
+                    "/update.json?api_key=%s&field1=%.1f&field2=%.1f",
+                    THINGSPEAK_WRITE_API_KEY, field1_fahrenheit, field2);
 }
 
 /**
@@ -327,6 +348,7 @@ void wifi_status(void)
         printk("WiFi Status Request Failed\n");
     }
 
+    #if (HOMEMONITOR_DEBUG)
     printk("\n");
 
     if (status.state >= WIFI_STATE_ASSOCIATED) {
@@ -336,6 +358,7 @@ void wifi_status(void)
         printk("Security: %s\n", wifi_security_txt(status.security));
         printk("RSSI: %d\n", status.rssi);
     }
+    #endif
 }
 
 /**
